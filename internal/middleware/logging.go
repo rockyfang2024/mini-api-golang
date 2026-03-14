@@ -1,27 +1,27 @@
 package middleware
 
 import (
-    "github.com/gin-gonic/gin"
-    "go.uber.org/zap"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
 )
 
-// Logger is a middleware for logging HTTP requests.
-func Logger() gin.HandlerFunc {
-    logger, _ := zap.NewProduction()
-    defer logger.Sync() // flushes buffer, if any
+// Logger returns a gin middleware that logs each HTTP request using zap.
+func Logger(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
 
-    return func(c *gin.Context) {
-        start := time.Now()
+		// Process the request
+		c.Next()
 
-        // Process the request
-        c.Next()
-
-        // Log the request
-        logger.Info("Request details",
-            zap.String("method", c.Request.Method),
-            zap.String("path", c.Request.URL.Path),
-            zap.Int("status", c.Writer.Status()),
-            zap.Duration("latency", time.Since(start)),
-        )
-    }
+		// Log the request
+		logger.Info("request",
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.Int("status", c.Writer.Status()),
+			zap.Duration("latency", time.Since(start)),
+			zap.String("client_ip", c.ClientIP()),
+		)
+	}
 }

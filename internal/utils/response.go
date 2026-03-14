@@ -1,25 +1,29 @@
 package utils
 
 import (
-	encoding/json
-	net/http
+	"github.com/gin-gonic/gin"
 )
 
-// Response is the structure for API responses
+// Response is the standard structure for all API responses.
 type Response struct {
-	Success bool        `json:"success"` 
+	Success bool        `json:"success"`
 	Message string      `json:"message"`
-	Data   interface{} `json:"data,omitempty"`
+	Data    interface{} `json:"data,omitempty"`
 }
 
-// SendResponse sends a JSON response to the client
-func SendResponse(w http.ResponseWriter, success bool, message string, data interface{}) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	response := Response{
-		Success: success,
+// SuccessResponse sends a JSON response with success=true.
+func SuccessResponse(c *gin.Context, statusCode int, message string, data interface{}) {
+	c.JSON(statusCode, Response{
+		Success: true,
 		Message: message,
 		Data:    data,
-	}
-	json.NewEncoder(w).Encode(response)
+	})
+}
+
+// ErrorResponse sends a JSON response with success=false.
+func ErrorResponse(c *gin.Context, statusCode int, message string) {
+	c.JSON(statusCode, Response{
+		Success: false,
+		Message: message,
+	})
 }
