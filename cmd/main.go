@@ -33,6 +33,11 @@ func main() {
 	}
 	log.Info("configuration loaded", zap.Int("port", cfg.Server.Port))
 
+	// Ensure upload directory exists
+	if err := os.MkdirAll(cfg.Upload.Dir, 0750); err != nil {
+		log.Fatal("failed to create upload directory", zap.Error(err))
+	}
+
 	// Initialize database
 	db, err := dao.InitDB(cfg.Database.Path)
 	if err != nil {
@@ -40,17 +45,33 @@ func main() {
 	}
 	log.Info("database initialized", zap.String("path", cfg.Database.Path))
 
-	// Wire up layers
+	// Wire up DAOs
 	userDAO := dao.NewUserDAO(db)
 	taskDAO := dao.NewTaskDAO(db)
 	postDAO := dao.NewPostDAO(db)
+	likeDAO := dao.NewLikeDAO(db)
+	repostDAO := dao.NewRepostDAO(db)
+	notificationDAO := dao.NewNotificationDAO(db)
+	followDAO := dao.NewFollowDAO(db)
 
+	// Wire up services
 	userSvc := service.NewUserService(userDAO)
-	postSvc := service.NewPostService(postDAO)
+	postSvc := service.NewPostService(postDAO, followDAO, notificationDAO)
+	avatarSvc := service.NewAvatarService(userDAO, cfg.Upload.Dir, cfg.Upload.MaxSizeMB)
+	likeSvc := service.NewLikeService(likeDAO, postDAO, notificationDAO)
+	repostSvc := service.NewRepostService(repostDAO, postDAO, notificationDAO)
+	notificationSvc := service.NewNotificationService(notificationDAO)
+	followSvc := service.NewFollowService(followDAO, userDAO, notificationDAO)
 
+	// Wire up handlers
 	userH := handler.NewUserHandler(userSvc, cfg)
 	taskH := handler.NewTaskHandler(taskDAO)
-	postH := handler.NewPostHandler(postSvc)
+	postH := handler.NewPostHandler(postSvc, likeSvc, repostSvc)
+	avatarH := handler.NewAvatarHandler(avatarSvc, cfg)
+	likeH := handler.NewLikeHandler(likeSvc)
+	repostH := handler.NewRepostHandler(repostSvc)
+	notificationH := handler.NewNotificationHandler(notificationSvc)
+	followH := handler.NewFollowHandler(followSvc)
 
 	// Set up Gin engine
 	if cfg.Log.Level != "debug" {
@@ -60,7 +81,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger(log))
 
-	routes.SetupRoutes(r, userH, taskH, postH, cfg.JWT.Secret)
+	routes.SetupRoutes(r, userH, taskH, postH, avatarH, likeH, repostH, notificationH, followH, cfg.Upload.Dir, cfg.JWT.Secret)
 
 	// Create HTTP server
 	srv := &http.Server{

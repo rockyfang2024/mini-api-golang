@@ -29,6 +29,12 @@
 | 个人主页 | 点击头像/导航进入"我的动态"，展示当前登录用户的全部动态（含私密） |
 | 可见性标签 | 每条动态显示 🌐 公开 / 🔒 私密 徽章，一眼区分 |
 | 响应式导航 | 顶部导航栏展示用户头像（首字母）和用户名，未登录显示登录/注册入口 |
+| **用户头像上传** | 登录用户可上传/更换头像（JPEG/PNG/WebP/GIF），保存至本地 `uploads/avatars/`，通过 `/uploads/` 路径访问 |
+| **点赞 / 取消点赞** | 对公开动态点赞，每用户每条动态仅能点赞一次；动态列表返回点赞数与是否已赞 |
+| **转发（Repost）** | 转发动态，每用户每条动态仅能转发一次；动态列表返回转发数与是否已转发 |
+| **通知系统** | 被点赞/转发时收到通知；可拉取通知列表（分页）、标记已读/全部已读 |
+| **关注功能** | 关注/取消关注其他用户，支持互相关注；查看粉丝/关注列表 |
+| **关注者通知** | 发布公开动态时，所有关注者自动收到新动态通知 |
 
 ---
 
@@ -199,7 +205,28 @@ mini-api-golang/
 {
   "success": true,
   "message": "ok",
-  "data": { "id": 1, "username": "alice", "email": "alice@example.com" }
+  "data": { "id": 1, "username": "alice", "email": "alice@example.com", "avatar_url": "/uploads/avatars/xxx.jpg" }
+}
+```
+
+---
+
+### 头像接口
+
+#### `POST /api/me/avatar` — 上传/更换头像（需登录）
+
+- **请求格式：** `multipart/form-data`
+- **表单字段：** `avatar`（文件，允许 JPEG/PNG/WebP/GIF）
+- **大小限制：** 默认 2 MB，可通过 `config/app.yaml` 的 `upload.max_size_mb` 配置
+- **存储路径：** 服务器本地 `./uploads/avatars/<uuid>.<ext>`
+- **访问方式：** `http://localhost:8080/uploads/avatars/<filename>`（静态文件服务）
+
+**响应 `200 OK`：**
+```json
+{
+  "success": true,
+  "message": "avatar uploaded",
+  "data": { "avatar_url": "/uploads/avatars/550e8400-e29b-41d4-a716-446655440000.jpg" }
 }
 ```
 
@@ -217,12 +244,7 @@ mini-api-golang/
 }
 ```
 
-| 字段 | 类型 | 必填 | 取值 |
-|------|------|------|------|
-| content | string | ✅ | 任意文本 |
-| visibility | string | ✅ | `public` 或 `private` |
-
-**响应 `201 Created`：**
+**响应 `201 Created`：**（包含点赞数、转发数等汇总字段）
 ```json
 {
   "success": true,
@@ -233,10 +255,16 @@ mini-api-golang/
     "author": { "id": 1, "username": "alice" },
     "content": "今天天气不错！",
     "visibility": "public",
+    "like_count": 0,
+    "repost_count": 0,
+    "is_liked": false,
+    "is_reposted": false,
     "created_at": "2026-03-14T08:00:00Z"
   }
 }
 ```
+
+> 发布公开动态时，所有关注者会自动收到 `new_post` 通知。
 
 ---
 
@@ -244,18 +272,7 @@ mini-api-golang/
 
 - **未登录**：只返回所有人的 `public` 动态
 - **已登录**（携带 token）：返回所有人的 `public` 动态 + 自己的 `private` 动态
-
-**响应 `200 OK`：**
-```json
-{
-  "success": true,
-  "message": "ok",
-  "data": [
-    { "id": 2, "author": { "username": "bob" }, "content": "Hello!", "visibility": "public", ... },
-    { "id": 1, "author": { "username": "alice" }, "content": "私密动态", "visibility": "private", ... }
-  ]
-}
-```
+- 每条动态包含 `like_count`、`repost_count`、`is_liked`、`is_reposted`
 
 ---
 
@@ -263,6 +280,161 @@ mini-api-golang/
 
 - 若 `:id` 为当前登录用户，返回该用户所有动态（含私密）
 - 否则仅返回该用户的 `public` 动态
+
+---
+
+### 点赞接口
+
+#### `POST /api/posts/:id/like` — 点赞动态（需登录）
+
+- 每用户每条动态只能点赞一次；重复点赞返回 `409 Conflict`
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "post liked" }
+```
+
+---
+
+#### `DELETE /api/posts/:id/like` — 取消点赞（需登录）
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "like removed" }
+```
+
+---
+
+### 转发接口
+
+#### `POST /api/posts/:id/repost` — 转发动态（需登录）
+
+- 每用户每条动态只能转发一次；重复转发返回 `409 Conflict`
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "post reposted" }
+```
+
+---
+
+### 通知接口
+
+#### `GET /api/notifications` — 获取通知列表（需登录）
+
+**查询参数：**
+
+| 参数 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| page | int | 1 | 页码 |
+| page_size | int | 20 | 每页条数（最大 100） |
+
+**响应 `200 OK`：**
+```json
+{
+  "success": true,
+  "message": "ok",
+  "data": {
+    "notifications": [
+      {
+        "id": 1,
+        "recipient_id": 1,
+        "actor_id": 2,
+        "type": "like",
+        "post_id": 3,
+        "is_read": false,
+        "actor": { "id": 2, "username": "bob" },
+        "post": { "id": 3, "content": "..." },
+        "created_at": "2026-03-14T08:00:00Z"
+      }
+    ],
+    "total": 5,
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+**通知类型（`type` 字段）：**
+
+| 值 | 触发场景 |
+|----|----------|
+| `like` | 有人点赞了你的动态 |
+| `repost` | 有人转发了你的动态 |
+| `follow` | 有人关注了你 |
+| `new_post` | 你关注的人发布了新动态 |
+
+---
+
+#### `PUT /api/notifications/:id/read` — 标记单条通知已读（需登录）
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "notification marked as read" }
+```
+
+---
+
+#### `PUT /api/notifications/read-all` — 标记所有通知已读（需登录）
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "all notifications marked as read" }
+```
+
+---
+
+### 关注接口
+
+#### `POST /api/users/:id/follow` — 关注用户（需登录）
+
+- 不能关注自己（返回 `400 Bad Request`）
+- 重复关注返回 `409 Conflict`
+- 关注成功后，被关注者收到 `follow` 通知
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "followed user" }
+```
+
+---
+
+#### `DELETE /api/users/:id/follow` — 取消关注（需登录）
+
+**响应 `200 OK`：**
+```json
+{ "success": true, "message": "unfollowed user" }
+```
+
+---
+
+#### `GET /api/users/:id/followers` — 获取粉丝列表
+
+**查询参数：** `page`（默认 1）、`page_size`（默认 20）
+
+**响应 `200 OK`：**
+```json
+{
+  "success": true,
+  "message": "ok",
+  "data": {
+    "followers": [
+      { "id": 1, "follower_id": 2, "following_id": 1, "follower": { "id": 2, "username": "bob" }, "created_at": "..." }
+    ],
+    "total": 1,
+    "page": 1,
+    "page_size": 20
+  }
+}
+```
+
+---
+
+#### `GET /api/users/:id/following` — 获取关注列表
+
+**查询参数：** `page`（默认 1）、`page_size`（默认 20）
+
+**响应 `200 OK`：**（结构同粉丝列表，字段 `following` 中含被关注用户信息）
 
 ---
 
@@ -316,6 +488,10 @@ jwt:
 
 log:
   level: info           # 日志级别: debug | info | warn | error
+
+upload:
+  dir: ./uploads        # 文件上传存储目录（相对于工作目录）
+  max_size_mb: 2        # 允许上传的最大文件大小（MB）
 ```
 
 也可通过环境变量覆盖（优先级高于配置文件）：
@@ -324,6 +500,8 @@ log:
 export MINI_API_SERVER_PORT=9090
 export MINI_API_JWT_SECRET=my-super-secret
 export MINI_API_DATABASE_PATH=/data/weibo.db
+export MINI_API_UPLOAD_DIR=/data/uploads
+export MINI_API_UPLOAD_MAX_SIZE_MB=5
 ```
 
 ### 3. 启动后端

@@ -8,15 +8,21 @@ import (
 
 // PostService provides business logic for post operations.
 type PostService struct {
-	postDAO *dao.PostDAO
+	postDAO         *dao.PostDAO
+	followDAO       *dao.FollowDAO
+	notificationDAO *dao.NotificationDAO
 }
 
 // NewPostService creates a new PostService.
-func NewPostService(postDAO *dao.PostDAO) *PostService {
-	return &PostService{postDAO: postDAO}
+func NewPostService(postDAO *dao.PostDAO, followDAO *dao.FollowDAO, notificationDAO *dao.NotificationDAO) *PostService {
+	return &PostService{
+		postDAO:         postDAO,
+		followDAO:       followDAO,
+		notificationDAO: notificationDAO,
+	}
 }
 
-// Create validates and persists a new post.
+// Create validates and persists a new post, then notifies all followers of the author.
 func (s *PostService) Create(authorID uint, content string, visibility models.Visibility) (*models.Post, error) {
 	if content == "" {
 		return nil, errors.New("content cannot be empty")
@@ -33,7 +39,37 @@ func (s *PostService) Create(authorID uint, content string, visibility models.Vi
 		return nil, err
 	}
 	// Reload to get preloaded Author
-	return s.postDAO.GetByID(post.ID)
+	saved, err := s.postDAO.GetByID(post.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Notify all followers about the new post (best-effort, only for public posts)
+	if visibility == models.VisibilityPublic {
+		s.notifyFollowers(authorID, saved.ID)
+	}
+
+	return saved, nil
+}
+
+// notifyFollowers sends new_post notifications to all followers of the author
+// using a single batch insert for efficiency.
+func (s *PostService) notifyFollowers(authorID, postID uint) {
+	followerIDs, err := s.followDAO.ListFollowerIDs(authorID)
+	if err != nil || len(followerIDs) == 0 {
+		return
+	}
+	notifications := make([]*models.Notification, len(followerIDs))
+	for i, fID := range followerIDs {
+		pid := postID
+		notifications[i] = &models.Notification{
+			RecipientID: fID,
+			ActorID:     authorID,
+			Type:        models.NotificationTypeNewPost,
+			PostID:      &pid,
+		}
+	}
+	_ = s.notificationDAO.BatchCreate(notifications)
 }
 
 // ListHome returns posts for the home feed based on viewer authentication.
@@ -53,3 +89,4 @@ func (s *PostService) ListByUser(authorID, viewerID uint) ([]models.Post, error)
 	}
 	return s.postDAO.ListByAuthorPublic(authorID)
 }
+

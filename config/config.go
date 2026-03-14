@@ -12,6 +12,14 @@ type ServerConfig struct {
 	Port int `mapstructure:"port"`
 }
 
+// UploadConfig holds file-upload-related configuration.
+type UploadConfig struct {
+	// Dir is the directory where uploaded files are stored (default: ./uploads).
+	Dir string `mapstructure:"dir"`
+	// MaxSizeMB is the maximum allowed upload size in megabytes (default: 2).
+	MaxSizeMB int64 `mapstructure:"max_size_mb"`
+}
+
 // DatabaseConfig holds database-related configuration.
 type DatabaseConfig struct {
 	Path string `mapstructure:"path"`
@@ -33,6 +41,7 @@ type Config struct {
 	Database DatabaseConfig `mapstructure:"database"`
 	JWT      JWTConfig      `mapstructure:"jwt"`
 	Log      LogConfig      `mapstructure:"log"`
+	Upload   UploadConfig   `mapstructure:"upload"`
 }
 
 // LoadConfig reads and parses the configuration file using viper.
@@ -47,6 +56,8 @@ func LoadConfig(configPath string) (*Config, error) {
 	v.SetDefault("database.path", "./mini-api.db")
 	v.SetDefault("jwt.secret", "mock-jwt-secret-key")
 	v.SetDefault("log.level", "info")
+	v.SetDefault("upload.dir", "./uploads")
+	v.SetDefault("upload.max_size_mb", 2)
 
 	v.SetConfigName("app")
 	v.SetConfigType("yaml")
