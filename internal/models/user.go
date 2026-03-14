@@ -8,6 +8,7 @@ type User struct {
 	Username     string    `gorm:"size:100;uniqueIndex;not null" json:"username"`
 	Email        string    `gorm:"size:200;uniqueIndex;not null" json:"email"`
 	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	AvatarURL    string    `gorm:"size:500" json:"avatar_url,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }

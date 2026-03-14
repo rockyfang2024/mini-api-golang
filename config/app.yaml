@@ -9,3 +9,9 @@ jwt:
 
 log:
   level: info
+
+upload:
+  # Directory for storing uploaded files (relative to working directory)
+  dir: ./uploads
+  # Maximum file upload size in megabytes
+  max_size_mb: 2

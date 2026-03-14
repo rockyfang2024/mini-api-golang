@@ -11,7 +11,19 @@ import (
 )
 
 // SetupRoutes registers all application routes on the given gin.Engine.
-func SetupRoutes(r *gin.Engine, userHandler *handler.UserHandler, taskHandler *handler.TaskHandler, postHandler *handler.PostHandler, jwtSecret string) {
+func SetupRoutes(
+	r *gin.Engine,
+	userHandler *handler.UserHandler,
+	taskHandler *handler.TaskHandler,
+	postHandler *handler.PostHandler,
+	avatarHandler *handler.AvatarHandler,
+	likeHandler *handler.LikeHandler,
+	repostHandler *handler.RepostHandler,
+	notificationHandler *handler.NotificationHandler,
+	followHandler *handler.FollowHandler,
+	uploadDir string,
+	jwtSecret string,
+) {
 	// CORS — allow the Vite dev server and same-origin requests
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:5173", "http://localhost:3000", "http://127.0.0.1:5173"},
@@ -21,6 +33,9 @@ func SetupRoutes(r *gin.Engine, userHandler *handler.UserHandler, taskHandler *h
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,
 	}))
+
+	// Serve uploaded files as static assets under /uploads
+	r.Static("/uploads", uploadDir)
 
 	// Health check
 	r.GET("/health", func(c *gin.Context) {
@@ -59,17 +74,37 @@ func SetupRoutes(r *gin.Engine, userHandler *handler.UserHandler, taskHandler *h
 		auth.POST("/login", userHandler.Login)
 	}
 
-	// Current user info (protected)
+	// Current user info + avatar upload (protected)
 	api.GET("/me", middleware.JWTMiddleware(jwtSecret), userHandler.Me)
+	api.POST("/me/avatar", middleware.JWTMiddleware(jwtSecret), avatarHandler.UploadAvatar)
 
 	// Posts — list is semi-public (uses optional auth to filter visibility)
-	// We register two versions of GET /api/posts: one with auth middleware that
-	// stores user_id, and one fallback for unauthenticated callers.
-	// Instead, we use a single route and an optional-auth helper.
 	api.GET("/posts", middleware.OptionalJWT(jwtSecret), postHandler.ListPosts)
 	api.POST("/posts", middleware.JWTMiddleware(jwtSecret), postHandler.CreatePost)
 
+	// Post interactions (protected)
+	postGroup := api.Group("/posts", middleware.JWTMiddleware(jwtSecret))
+	{
+		postGroup.POST("/:id/like", likeHandler.LikePost)
+		postGroup.DELETE("/:id/like", likeHandler.UnlikePost)
+		postGroup.POST("/:id/repost", repostHandler.RepostPost)
+	}
+
 	// User posts (optional auth for visibility filtering)
 	api.GET("/users/:id/posts", middleware.OptionalJWT(jwtSecret), postHandler.ListUserPosts)
+
+	// Follow routes (protected for mutation, public for reading)
+	api.POST("/users/:id/follow", middleware.JWTMiddleware(jwtSecret), followHandler.FollowUser)
+	api.DELETE("/users/:id/follow", middleware.JWTMiddleware(jwtSecret), followHandler.UnfollowUser)
+	api.GET("/users/:id/followers", followHandler.ListFollowers)
+	api.GET("/users/:id/following", followHandler.ListFollowing)
+
+	// Notifications (all protected)
+	notifs := api.Group("/notifications", middleware.JWTMiddleware(jwtSecret))
+	{
+		notifs.GET("", notificationHandler.ListNotifications)
+		notifs.PUT("/read-all", notificationHandler.MarkAllNotificationsRead)
+		notifs.PUT("/:id/read", notificationHandler.MarkNotificationRead)
+	}
 }
 

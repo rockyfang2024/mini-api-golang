@@ -12,17 +12,61 @@ import (
 
 // PostHandler holds dependencies for post HTTP handlers.
 type PostHandler struct {
-	postService *service.PostService
+	postService   *service.PostService
+	likeService   *service.LikeService
+	repostService *service.RepostService
 }
 
 // NewPostHandler creates a new PostHandler.
-func NewPostHandler(postService *service.PostService) *PostHandler {
-	return &PostHandler{postService: postService}
+func NewPostHandler(postService *service.PostService, likeService *service.LikeService, repostService *service.RepostService) *PostHandler {
+	return &PostHandler{
+		postService:   postService,
+		likeService:   likeService,
+		repostService: repostService,
+	}
+}
+
+// PostResponse wraps a post with aggregated like/repost counts and viewer state.
+type PostResponse struct {
+	models.Post
+	LikeCount   int64 `json:"like_count"`
+	RepostCount int64 `json:"repost_count"`
+	IsLiked     bool  `json:"is_liked"`
+	IsReposted  bool  `json:"is_reposted"`
+}
+
+// enrichPost adds like/repost counts and viewer state to a post.
+func (h *PostHandler) enrichPost(post models.Post, viewerID uint) PostResponse {
+	likeCount, _ := h.likeService.LikeCount(post.ID)
+	repostCount, _ := h.repostService.RepostCount(post.ID)
+
+	var isLiked, isReposted bool
+	if viewerID > 0 {
+		isLiked, _ = h.likeService.IsLiked(viewerID, post.ID)
+		isReposted, _ = h.repostService.IsReposted(viewerID, post.ID)
+	}
+
+	return PostResponse{
+		Post:        post,
+		LikeCount:   likeCount,
+		RepostCount: repostCount,
+		IsLiked:     isLiked,
+		IsReposted:  isReposted,
+	}
+}
+
+// enrichPosts enriches a slice of posts.
+func (h *PostHandler) enrichPosts(posts []models.Post, viewerID uint) []PostResponse {
+	result := make([]PostResponse, len(posts))
+	for i, p := range posts {
+		result[i] = h.enrichPost(p, viewerID)
+	}
+	return result
 }
 
 // createPostRequest is the expected body for POST /api/posts.
 type createPostRequest struct {
-	Content    string           `json:"content"    binding:"required"`
+	Content    string            `json:"content"    binding:"required"`
 	Visibility models.Visibility `json:"visibility" binding:"required,oneof=public private"`
 }
 
@@ -47,7 +91,7 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusCreated, "post created", post)
+	utils.SuccessResponse(c, http.StatusCreated, "post created", h.enrichPost(*post, uint(userID)))
 }
 
 // ListPosts handles GET /api/posts — home feed (visibility filtered by auth state).
@@ -65,7 +109,7 @@ func (h *PostHandler) ListPosts(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "ok", posts)
+	utils.SuccessResponse(c, http.StatusOK, "ok", h.enrichPosts(posts, viewerID))
 }
 
 // ListUserPosts handles GET /api/users/:id/posts.
@@ -90,5 +134,6 @@ func (h *PostHandler) ListUserPosts(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "ok", posts)
+	utils.SuccessResponse(c, http.StatusOK, "ok", h.enrichPosts(posts, viewerID))
 }
+
