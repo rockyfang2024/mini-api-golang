@@ -1,6 +1,7 @@
 package service
 
 import (
+	"errors"
 	"fmt"
 
 	"go.uber.org/zap"
@@ -14,14 +15,16 @@ type FollowService struct {
 	followDAO       *dao.FollowDAO
 	userDAO         *dao.UserDAO
 	notificationDAO *dao.NotificationDAO
+	settingsDAO     *dao.UserSettingsDAO
 }
 
 // NewFollowService creates a new FollowService.
-func NewFollowService(followDAO *dao.FollowDAO, userDAO *dao.UserDAO, notificationDAO *dao.NotificationDAO) *FollowService {
+func NewFollowService(followDAO *dao.FollowDAO, userDAO *dao.UserDAO, notificationDAO *dao.NotificationDAO, settingsDAO *dao.UserSettingsDAO) *FollowService {
 	return &FollowService{
 		followDAO:       followDAO,
 		userDAO:         userDAO,
 		notificationDAO: notificationDAO,
+		settingsDAO:     settingsDAO,
 	}
 }
 
@@ -35,6 +38,14 @@ func (s *FollowService) Follow(followerID, followingID uint) error {
 	// Verify the target user exists
 	if _, err := s.userDAO.GetByID(followingID); err != nil {
 		return fmt.Errorf("user not found")
+	}
+
+	settings, err := ensureUserSettings(s.settingsDAO, followingID)
+	if err != nil {
+		return fmt.Errorf("failed to load user settings: %w", err)
+	}
+	if !settings.AllowFollow {
+		return ErrFollowDisabled
 	}
 
 	// Check for duplicate
@@ -66,6 +77,9 @@ func (s *FollowService) Follow(followerID, followingID uint) error {
 
 	return nil
 }
+
+// ErrFollowDisabled indicates the user has disabled new followers.
+var ErrFollowDisabled = errors.New("follow disabled")
 
 // Unfollow removes a follow relationship from followerID → followingID.
 func (s *FollowService) Unfollow(followerID, followingID uint) error {

@@ -19,8 +19,11 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	// Auto-migrate all models
 	if err := db.AutoMigrate(
 		&models.User{},
+		&models.UserSettings{},
 		&Task{},
 		&models.Post{},
+		&models.PostImage{},
+		&models.Comment{},
 		&models.Like{},
 		&models.Repost{},
 		&models.Notification{},

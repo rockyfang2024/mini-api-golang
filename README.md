@@ -35,6 +35,10 @@
 | **通知系统** | 被点赞/转发时收到通知；可拉取通知列表（分页）、标记已读/全部已读 |
 | **关注功能** | 关注/取消关注其他用户，支持互相关注；查看粉丝/关注列表 |
 | **关注者通知** | 发布公开动态时，所有关注者自动收到新动态通知 |
+| **动态多图上传** | 每条动态最多上传 9 张图片，保存至本地 `uploads/posts/` |
+| **评论/回复** | 支持评论动态与回复评论，递归展示评论线程 |
+| **用户主页** | 点击头像/用户名进入用户主页，查看其非私密动态 |
+| **个人设置** | 可设置禁止评论、禁止关注、仅关注者可见、仅关注用户可见 |
 
 ---
 
@@ -95,12 +99,15 @@ mini-api-golang/
 │   │   ├── router/index.js      # Vue Router 路由定义（含鉴权守卫）
 │   │   ├── stores/auth.js       # 轻量认证状态（reactive + localStorage）
 │   │   ├── views/
-│   │   │   ├── HomeView.vue     # 首页：发布表单 + 动态流
-│   │   │   ├── LoginView.vue    # 登录页
-│   │   │   ├── RegisterView.vue # 注册页
-│   │   │   └── MyPostsView.vue  # 我的动态页（含私密）
+│   │   │   ├── HomeView.vue       # 首页：发布表单 + 动态流
+│   │   │   ├── LoginView.vue      # 登录页
+│   │   │   ├── RegisterView.vue   # 注册页
+│   │   │   ├── MyPostsView.vue    # 我的动态页（含私密）
+│   │   │   ├── UserProfileView.vue # 用户主页
+│   │   │   └── SettingsView.vue   # 个人设置页
 │   │   ├── components/
-│   │   │   └── PostCard.vue     # 动态卡片组件
+│   │   │   ├── PostCard.vue       # 动态卡片组件
+│   │   │   └── CommentItem.vue    # 评论递归组件
 │   │   └── App.vue              # 根组件（导航栏）
 │   ├── vite.config.js           # Vite 配置（含 /api 代理）
 │   ├── Dockerfile               # 前端生产镜像（Nginx）
@@ -236,13 +243,13 @@ mini-api-golang/
 
 #### `POST /api/posts` — 发布动态（需登录）
 
-**请求体：**
-```json
-{
-  "content": "今天天气不错！",
-  "visibility": "public"
-}
-```
+**请求格式：** `multipart/form-data`
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| content | string | ✅ | 动态正文 |
+| visibility | string | ✅ | `public` 或 `private` |
+| images | file[] | ❌ | 最多 9 张图片（JPEG/PNG/WebP/GIF） |
 
 **响应 `201 Created`：**（包含点赞数、转发数等汇总字段）
 ```json
@@ -255,6 +262,9 @@ mini-api-golang/
     "author": { "id": 1, "username": "alice" },
     "content": "今天天气不错！",
     "visibility": "public",
+    "images": [
+      { "id": 10, "url": "/uploads/posts/xxx.jpg", "sort_order": 1 }
+    ],
     "like_count": 0,
     "repost_count": 0,
     "is_liked": false,
@@ -280,6 +290,62 @@ mini-api-golang/
 
 - 若 `:id` 为当前登录用户，返回该用户所有动态（含私密）
 - 否则仅返回该用户的 `public` 动态
+- 若用户开启了「仅关注者可见 / 仅关注用户可见」，将进一步限制查看权限
+
+---
+
+#### `GET /api/users/:id` — 获取用户主页信息（可选登录）
+
+**响应 `200 OK`：**
+```json
+{
+  "success": true,
+  "message": "ok",
+  "data": { "id": 2, "username": "bob", "email": "bob@example.com", "avatar_url": "/uploads/avatars/..." }
+}
+```
+
+---
+
+### 评论接口
+
+#### `GET /api/posts/:id/comments` — 获取动态评论（可选登录）
+
+**响应 `200 OK`：**
+```json
+{
+  "success": true,
+  "message": "ok",
+  "data": [
+    {
+      "id": 1,
+      "post_id": 3,
+      "content": "说得好！",
+      "parent_comment_id": null,
+      "author": { "id": 2, "username": "bob" },
+      "created_at": "..."
+    }
+  ]
+}
+```
+
+---
+
+#### `POST /api/posts/:id/comments` — 评论动态（需登录）
+
+**请求体：**
+```json
+{ "content": "我也觉得！" }
+```
+
+---
+
+#### `POST /api/comments/:id/replies` — 回复评论（需登录）
+
+**请求体：**
+```json
+{ "content": "谢谢你的回复" }
+```
 
 ---
 
@@ -435,6 +501,40 @@ mini-api-golang/
 **查询参数：** `page`（默认 1）、`page_size`（默认 20）
 
 **响应 `200 OK`：**（结构同粉丝列表，字段 `following` 中含被关注用户信息）
+
+---
+
+### 设置接口
+
+#### `GET /api/settings` — 获取个人设置（需登录）
+
+**响应 `200 OK`：**
+```json
+{
+  "success": true,
+  "message": "ok",
+  "data": {
+    "allow_comments": true,
+    "allow_follow": true,
+    "only_followers_can_view": false,
+    "only_following_can_view": false
+  }
+}
+```
+
+---
+
+#### `PUT /api/settings` — 更新个人设置（需登录）
+
+**请求体：**
+```json
+{
+  "allow_comments": true,
+  "allow_follow": false,
+  "only_followers_can_view": true,
+  "only_following_can_view": false
+}
+```
 
 ---
 

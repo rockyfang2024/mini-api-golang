@@ -11,14 +11,16 @@ type PostService struct {
 	postDAO         *dao.PostDAO
 	followDAO       *dao.FollowDAO
 	notificationDAO *dao.NotificationDAO
+	settingsDAO     *dao.UserSettingsDAO
 }
 
 // NewPostService creates a new PostService.
-func NewPostService(postDAO *dao.PostDAO, followDAO *dao.FollowDAO, notificationDAO *dao.NotificationDAO) *PostService {
+func NewPostService(postDAO *dao.PostDAO, followDAO *dao.FollowDAO, notificationDAO *dao.NotificationDAO, settingsDAO *dao.UserSettingsDAO) *PostService {
 	return &PostService{
 		postDAO:         postDAO,
 		followDAO:       followDAO,
 		notificationDAO: notificationDAO,
+		settingsDAO:     settingsDAO,
 	}
 }
 
@@ -76,9 +78,17 @@ func (s *PostService) notifyFollowers(authorID, postID uint) {
 // Unauthenticated viewers (viewerID == 0) see only public posts.
 func (s *PostService) ListHome(viewerID uint) ([]models.Post, error) {
 	if viewerID == 0 {
-		return s.postDAO.ListPublic()
+		posts, err := s.postDAO.ListPublic()
+		if err != nil {
+			return nil, err
+		}
+		return s.filterVisiblePosts(posts, viewerID)
 	}
-	return s.postDAO.ListForUser(viewerID)
+	posts, err := s.postDAO.ListForUser(viewerID)
+	if err != nil {
+		return nil, err
+	}
+	return s.filterVisiblePosts(posts, viewerID)
 }
 
 // ListByUser returns posts for a given author as seen by the viewer.
@@ -87,6 +97,46 @@ func (s *PostService) ListByUser(authorID, viewerID uint) ([]models.Post, error)
 	if authorID == viewerID {
 		return s.postDAO.ListByAuthorAll(authorID)
 	}
+	canView, err := canViewUserPosts(s.settingsDAO, s.followDAO, viewerID, authorID)
+	if err != nil {
+		return nil, err
+	}
+	if !canView {
+		return nil, ErrPostsNotVisible
+	}
 	return s.postDAO.ListByAuthorPublic(authorID)
 }
 
+// Delete removes a post by ID.
+func (s *PostService) Delete(postID uint) error {
+	return s.postDAO.Delete(postID)
+}
+
+// CanViewPost determines whether a viewer can see a specific post.
+func (s *PostService) CanViewPost(post *models.Post, viewerID uint) (bool, error) {
+	if post.Visibility == models.VisibilityPrivate && post.AuthorID != viewerID {
+		return false, nil
+	}
+	return canViewUserPosts(s.settingsDAO, s.followDAO, viewerID, post.AuthorID)
+}
+
+func (s *PostService) filterVisiblePosts(posts []models.Post, viewerID uint) ([]models.Post, error) {
+	visible := make([]models.Post, 0, len(posts))
+	for _, post := range posts {
+		if post.Visibility == models.VisibilityPrivate && post.AuthorID != viewerID {
+			continue
+		}
+		canView, err := canViewUserPosts(s.settingsDAO, s.followDAO, viewerID, post.AuthorID)
+		if err != nil {
+			return nil, err
+		}
+		if !canView {
+			continue
+		}
+		visible = append(visible, post)
+	}
+	return visible, nil
+}
+
+// ErrPostsNotVisible indicates the viewer is not permitted to see the user's posts.
+var ErrPostsNotVisible = errors.New("posts not visible")

@@ -7,6 +7,9 @@ import PostCard from '../components/PostCard.vue'
 const posts = ref([])
 const content = ref('')
 const visibility = ref('public')
+const images = ref([])
+const imagePreviews = ref([])
+const imageError = ref('')
 const error = ref('')
 const postError = ref('')
 const loading = ref(false)
@@ -57,21 +60,64 @@ function handleFollowChange({ userId, isFollowing }) {
 
 async function handlePost() {
   postError.value = ''
+  imageError.value = ''
   if (!content.value.trim()) {
     postError.value = '动态内容不能为空'
     return
   }
+  if (images.value.length > 9) {
+    imageError.value = '最多只能上传 9 张图片'
+    return
+  }
   posting.value = true
   try {
-    const res = await createPost(content.value, visibility.value)
+    const res = await createPost(content.value, visibility.value, images.value)
     posts.value.unshift(res.data.data)
     content.value = ''
     visibility.value = 'public'
+    clearImages()
   } catch (e) {
     postError.value = e.response?.data?.message || '发布失败，请重试'
   } finally {
     posting.value = false
   }
+}
+
+function clearImages() {
+  imagePreviews.value.forEach((url) => URL.revokeObjectURL(url))
+  images.value = []
+  imagePreviews.value = []
+}
+
+function handleImageChange(event) {
+  const files = Array.from(event.target.files || [])
+  if (files.length === 0) return
+  imageError.value = ''
+  if (images.value.length + files.length > 9) {
+    imageError.value = '最多只能上传 9 张图片'
+    event.target.value = ''
+    return
+  }
+  const nextImages = [...images.value, ...files]
+  const nextPreviews = [...imagePreviews.value]
+  files.forEach((file) => {
+    nextPreviews.push(URL.createObjectURL(file))
+  })
+  images.value = nextImages
+  imagePreviews.value = nextPreviews
+  event.target.value = ''
+}
+
+function removeImage(index) {
+  const nextImages = [...images.value]
+  const nextPreviews = [...imagePreviews.value]
+  const [removedPreview] = nextPreviews.splice(index, 1)
+  nextImages.splice(index, 1)
+  if (removedPreview) {
+    URL.revokeObjectURL(removedPreview)
+  }
+  images.value = nextImages
+  imagePreviews.value = nextPreviews
 }
 
 onMounted(fetchPosts)
@@ -99,6 +145,19 @@ watch(
       </div>
       <div class="form-group" style="margin-top:12px">
         <textarea v-model="content" placeholder="写下你的动态…" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label class="upload-label">
+          添加图片（最多 9 张）
+          <input class="upload-input" type="file" accept="image/*" multiple @change="handleImageChange" />
+        </label>
+        <div v-if="imagePreviews.length" class="image-grid">
+          <div v-for="(preview, index) in imagePreviews" :key="preview" class="image-item">
+            <img :src="preview" alt="preview" />
+            <button class="remove-btn" type="button" @click="removeImage(index)">×</button>
+          </div>
+        </div>
+        <p v-if="imageError" class="error-msg" style="margin-top:8px">{{ imageError }}</p>
       </div>
       <div class="compose-footer">
         <select v-model="visibility" class="visibility-select">
@@ -134,4 +193,23 @@ watch(
 .compose-hint { color: #888; font-size: .95rem; }
 .compose-footer { display: flex; align-items: center; justify-content: space-between; }
 .visibility-select { padding: 8px 12px; border: 1px solid #ddd; border-radius: 8px; font-size: .9rem; outline: none; }
+.upload-label { display: inline-flex; align-items: center; gap: 8px; font-size: .9rem; color: #555; cursor: pointer; }
+.upload-input { display: none; }
+.image-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.image-item { position: relative; border-radius: 8px; overflow: hidden; }
+.image-item img { width: 100%; height: 86px; object-fit: cover; display: block; }
+.remove-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: none;
+  background: rgba(0,0,0,.6);
+  color: #fff;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: pointer;
+  line-height: 20px;
+  font-size: 14px;
+}
 </style>

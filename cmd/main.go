@@ -53,25 +53,33 @@ func main() {
 	repostDAO := dao.NewRepostDAO(db)
 	notificationDAO := dao.NewNotificationDAO(db)
 	followDAO := dao.NewFollowDAO(db)
+	userSettingsDAO := dao.NewUserSettingsDAO(db)
+	postImageDAO := dao.NewPostImageDAO(db)
+	commentDAO := dao.NewCommentDAO(db)
 
 	// Wire up services
-	userSvc := service.NewUserService(userDAO)
-	postSvc := service.NewPostService(postDAO, followDAO, notificationDAO)
+	userSvc := service.NewUserService(userDAO, userSettingsDAO)
+	postSvc := service.NewPostService(postDAO, followDAO, notificationDAO, userSettingsDAO)
 	avatarSvc := service.NewAvatarService(userDAO, cfg.Upload.Dir, cfg.Upload.MaxSizeMB)
+	postImageSvc := service.NewPostImageService(postImageDAO, cfg.Upload.Dir, cfg.Upload.MaxSizeMB)
 	likeSvc := service.NewLikeService(likeDAO, postDAO, notificationDAO)
 	repostSvc := service.NewRepostService(repostDAO, postDAO, notificationDAO)
 	notificationSvc := service.NewNotificationService(notificationDAO)
-	followSvc := service.NewFollowService(followDAO, userDAO, notificationDAO)
+	followSvc := service.NewFollowService(followDAO, userDAO, notificationDAO, userSettingsDAO)
+	commentSvc := service.NewCommentService(commentDAO, postDAO, userSettingsDAO, followDAO)
+	userSettingsSvc := service.NewUserSettingsService(userSettingsDAO)
 
 	// Wire up handlers
 	userH := handler.NewUserHandler(userSvc, cfg)
 	taskH := handler.NewTaskHandler(taskDAO)
-	postH := handler.NewPostHandler(postSvc, likeSvc, repostSvc)
+	postH := handler.NewPostHandler(postSvc, postImageSvc, likeSvc, repostSvc)
 	avatarH := handler.NewAvatarHandler(avatarSvc, cfg)
 	likeH := handler.NewLikeHandler(likeSvc)
 	repostH := handler.NewRepostHandler(repostSvc)
 	notificationH := handler.NewNotificationHandler(notificationSvc)
 	followH := handler.NewFollowHandler(followSvc)
+	commentH := handler.NewCommentHandler(commentSvc)
+	userSettingsH := handler.NewUserSettingsHandler(userSettingsSvc)
 
 	// Set up Gin engine
 	if cfg.Log.Level != "debug" {
@@ -81,7 +89,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger(log))
 
-	routes.SetupRoutes(r, userH, taskH, postH, avatarH, likeH, repostH, notificationH, followH, cfg.Upload.Dir, cfg.JWT.Secret)
+	routes.SetupRoutes(r, userH, taskH, postH, avatarH, likeH, repostH, notificationH, followH, commentH, userSettingsH, cfg.Upload.Dir, cfg.JWT.Secret)
 
 	// Create HTTP server
 	srv := &http.Server{

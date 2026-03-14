@@ -21,6 +21,8 @@ func SetupRoutes(
 	repostHandler *handler.RepostHandler,
 	notificationHandler *handler.NotificationHandler,
 	followHandler *handler.FollowHandler,
+	commentHandler *handler.CommentHandler,
+	userSettingsHandler *handler.UserSettingsHandler,
 	uploadDir string,
 	jwtSecret string,
 ) {
@@ -77,10 +79,14 @@ func SetupRoutes(
 	// Current user info + avatar upload (protected)
 	api.GET("/me", middleware.JWTMiddleware(jwtSecret), userHandler.Me)
 	api.POST("/me/avatar", middleware.JWTMiddleware(jwtSecret), avatarHandler.UploadAvatar)
+	api.GET("/settings", middleware.JWTMiddleware(jwtSecret), userSettingsHandler.GetSettings)
+	api.PUT("/settings", middleware.JWTMiddleware(jwtSecret), userSettingsHandler.UpdateSettings)
 
 	// Posts — list is semi-public (uses optional auth to filter visibility)
 	api.GET("/posts", middleware.OptionalJWT(jwtSecret), postHandler.ListPosts)
 	api.POST("/posts", middleware.JWTMiddleware(jwtSecret), postHandler.CreatePost)
+	api.GET("/posts/:id/comments", middleware.OptionalJWT(jwtSecret), commentHandler.ListComments)
+	api.POST("/posts/:id/comments", middleware.JWTMiddleware(jwtSecret), commentHandler.CreateComment)
 
 	// Post interactions (protected)
 	postGroup := api.Group("/posts", middleware.JWTMiddleware(jwtSecret))
@@ -90,8 +96,11 @@ func SetupRoutes(
 		postGroup.POST("/:id/repost", repostHandler.RepostPost)
 	}
 
+	api.POST("/comments/:id/replies", middleware.JWTMiddleware(jwtSecret), commentHandler.ReplyComment)
+
 	// User posts (optional auth for visibility filtering)
 	api.GET("/users/:id/posts", middleware.OptionalJWT(jwtSecret), postHandler.ListUserPosts)
+	api.GET("/users/:id", middleware.OptionalJWT(jwtSecret), userHandler.GetUserProfile)
 
 	// Follow routes (protected for mutation, public for reading)
 	api.POST("/users/:id/follow", middleware.JWTMiddleware(jwtSecret), followHandler.FollowUser)
@@ -107,4 +116,3 @@ func SetupRoutes(
 		notifs.PUT("/:id/read", notificationHandler.MarkNotificationRead)
 	}
 }
-

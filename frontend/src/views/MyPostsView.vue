@@ -129,10 +129,12 @@ onMounted(async () => {
         <div v-else-if="following.length === 0" class="empty-state">暂无关注</div>
         <ul v-else class="follow-list">
           <li v-for="item in following" :key="item.id">
-            <span class="avatar avatar-sm">
-              {{ item.following?.username?.[0]?.toUpperCase() || '?' }}
-            </span>
-            <span>{{ item.following?.username || '未知用户' }}</span>
+            <router-link :to="`/users/${item.following_id}`" class="follow-user">
+              <span class="avatar avatar-sm">
+                {{ item.following?.username?.[0]?.toUpperCase() || '?' }}
+              </span>
+              <span>{{ item.following?.username || '未知用户' }}</span>
+            </router-link>
           </li>
         </ul>
       </div>
@@ -142,10 +144,12 @@ onMounted(async () => {
         <div v-else-if="followers.length === 0" class="empty-state">暂无粉丝</div>
         <ul v-else class="follow-list">
           <li v-for="item in followers" :key="item.id">
-            <span class="avatar avatar-sm">
-              {{ item.follower?.username?.[0]?.toUpperCase() || '?' }}
-            </span>
-            <span>{{ item.follower?.username || '未知用户' }}</span>
+            <router-link :to="`/users/${item.follower_id}`" class="follow-user">
+              <span class="avatar avatar-sm">
+                {{ item.follower?.username?.[0]?.toUpperCase() || '?' }}
+              </span>
+              <span>{{ item.follower?.username || '未知用户' }}</span>
+            </router-link>
           </li>
         </ul>
       </div>
@@ -177,5 +181,7 @@ onMounted(async () => {
 .count { font-size: .85rem; color: #888; }
 .follow-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .follow-list li { display: flex; align-items: center; gap: 8px; font-size: .9rem; }
+.follow-user { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: #333; }
+.follow-user:hover { color: #1da1f2; }
 .avatar-sm { width: 26px; height: 26px; font-size: .75rem; border-radius: 50%; background: #1da1f2; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
 </style>

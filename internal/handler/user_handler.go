@@ -115,6 +115,23 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusOK, "ok", user)
 }
 
+// GetUserProfile handles GET /api/users/:id — public user profile.
+func (h *UserHandler) GetUserProfile(c *gin.Context) {
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusBadRequest, "invalid user id")
+		return
+	}
+
+	user, err := h.userService.GetByID(id)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "user not found")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "ok", user)
+}
+
 // updateUserRequest is the expected body for PUT /users/:id.
 type updateUserRequest struct {
 	Email string `json:"email" binding:"omitempty,email"`
