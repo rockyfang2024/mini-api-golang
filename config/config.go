@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -36,6 +37,8 @@ type Config struct {
 
 // LoadConfig reads and parses the configuration file using viper.
 // It looks for app.yaml in the config directory or current directory.
+// Environment variables with the MINI_API_ prefix override file values
+// (e.g. MINI_API_SERVER_PORT, MINI_API_JWT_SECRET).
 func LoadConfig(configPath string) (*Config, error) {
 	v := viper.New()
 
@@ -57,6 +60,12 @@ func LoadConfig(configPath string) (*Config, error) {
 			return nil, fmt.Errorf("error reading config file: %w", err)
 		}
 	}
+
+	// Allow overriding any config value via MINI_API_* environment variables.
+	// e.g. MINI_API_SERVER_PORT=9090 overrides server.port
+	v.SetEnvPrefix("MINI_API")
+	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	v.AutomaticEnv()
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {

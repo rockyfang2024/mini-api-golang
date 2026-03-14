@@ -1,175 +1,120 @@
-# mini-api-golang
+# 简易微博 Mini-Weibo
 
-A lightweight RESTful API service built with Go, featuring user management and task management, backed by SQLite and secured with JWT authentication.
-
-## Tech Stack
-
-| Component      | Technology                          |
-|---------------|-------------------------------------|
-| Web Framework | [Gin](https://github.com/gin-gonic/gin) v1.9 |
-| Database      | SQLite (via [GORM](https://gorm.io)) |
-| Auth          | JWT (HS256, 72-hour expiry)         |
-| Config        | [Viper](https://github.com/spf13/viper) (YAML) |
-| Logging       | [Zap](https://github.com/uber-go/zap) |
-| Go version    | 1.21+                               |
+一个基于 **Go（后端）+ Vue 3（前端）** 构建的简易微博（类 Twitter）应用，支持用户注册登录、发布动态（支持公开/私密可见性）、查看动态流，以及个人主页展示。数据使用 **SQLite** 本地持久化，鉴权使用 **JWT**，无需任何外部云服务即可在本地独立运行。
 
 ---
 
-## Project Structure
+## 目录
+
+- [功能列表](#功能列表)
+- [技术栈](#技术栈)
+- [目录结构](#目录结构)
+- [API 设计说明](#api-设计说明)
+- [本地开发运行](#本地开发运行)
+- [生产部署](#生产部署)
+- [访问方式](#访问方式)
+- [常见问题](#常见问题)
+
+---
+
+## 功能列表
+
+| 功能 | 说明 |
+|------|------|
+| 用户注册 | 填写用户名、邮箱、密码（≥6位）完成注册，密码使用 bcrypt 加密存储 |
+| 用户登录 | 账号密码登录，成功后返回 JWT Token，有效期 72 小时 |
+| 退出登录 | 前端清除 localStorage 中的 token，跳转到登录页 |
+| 发布动态 | 登录后可发布文字动态，支持选择可见性：`public`（所有人可见）或 `private`（仅自己可见） |
+| 首页动态流 | 未登录仅展示所有人的公开动态；登录后额外展示自己的私密动态 |
+| 个人主页 | 点击头像/导航进入"我的动态"，展示当前登录用户的全部动态（含私密） |
+| 可见性标签 | 每条动态显示 🌐 公开 / 🔒 私密 徽章，一眼区分 |
+| 响应式导航 | 顶部导航栏展示用户头像（首字母）和用户名，未登录显示登录/注册入口 |
+
+---
+
+## 技术栈
+
+| 层次 | 技术 |
+|------|------|
+| 后端框架 | [Gin](https://github.com/gin-gonic/gin) v1.10 |
+| 数据库 | SQLite（通过 [GORM](https://gorm.io) ORM，自动建表/迁移） |
+| 鉴权 | JWT HS256，72 小时有效，前端存储于 `localStorage` |
+| 密码存储 | bcrypt（`golang.org/x/crypto/bcrypt`，默认代价系数） |
+| 跨域 | `github.com/gin-contrib/cors` v1.7.3 |
+| 配置管理 | [Viper](https://github.com/spf13/viper)（YAML + 环境变量覆盖） |
+| 日志 | [Zap](https://github.com/uber-go/zap) 结构化日志 |
+| 前端框架 | [Vue 3](https://vuejs.org/) + [Vite](https://vite.dev/) |
+| 前端路由 | Vue Router 4 |
+| HTTP 客户端 | Axios |
+| Go 版本 | 1.21+ |
+| Node 版本 | 18+ |
+
+---
+
+## 目录结构
 
 ```
 mini-api-golang/
 ├── cmd/
-│   └── main.go            # Application entry point
+│   └── main.go                  # 应用入口，初始化并启动服务
 ├── config/
-│   ├── app.yaml           # Configuration file
-│   └── config.go          # Config loader (Viper)
+│   ├── app.yaml                 # 配置文件（端口、数据库路径、JWT secret 等）
+│   └── config.go                # 配置加载（Viper，支持环境变量覆盖）
 ├── internal/
-│   ├── dao/               # Data access layer (GORM models + queries)
-│   │   ├── database.go    # SQLite initialization & auto-migration
-│   │   ├── user_dao.go    # User CRUD operations
-│   │   └── task_dao.go    # Task CRUD operations
-│   ├── handler/           # HTTP handlers (Gin)
-│   │   ├── user_handler.go
-│   │   └── task_handler.go
-│   ├── middleware/        # Gin middleware
-│   │   ├── jwt.go         # JWT authentication middleware
-│   │   └── logging.go     # Request logging middleware
-│   ├── models/            # Domain models
-│   │   └── user.go
+│   ├── dao/                     # 数据访问层（GORM）
+│   │   ├── database.go          # SQLite 初始化 & 自动迁移
+│   │   ├── user_dao.go          # 用户 CRUD
+│   │   ├── task_dao.go          # 任务 CRUD（旧功能保留）
+│   │   └── post_dao.go          # 动态 CRUD（含可见性过滤查询）
+│   ├── handler/                 # HTTP 处理器（Gin）
+│   │   ├── user_handler.go      # 注册、登录、获取/更新/删除用户、/api/me
+│   │   ├── task_handler.go      # 任务处理器（旧功能保留）
+│   │   └── post_handler.go      # 发布动态、获取动态列表、获取用户动态
+│   ├── middleware/
+│   │   ├── jwt.go               # JWT 强制鉴权 & 可选鉴权中间件
+│   │   └── logging.go           # 请求日志中间件
+│   ├── models/
+│   │   ├── user.go              # User 数据模型
+│   │   └── post.go              # Post 数据模型（含 Visibility 枚举）
 │   ├── routes/
-│   │   └── routes.go      # Route registration
-│   ├── service/           # Business logic layer
-│   └── utils/             # Shared utilities (JWT, response, password)
-└── pkg/
-    └── logger/            # Zap logger initializer
+│   │   └── routes.go            # 路由注册（含 CORS、/api/* 路由组）
+│   └── service/
+│       ├── user_service.go      # 用户业务逻辑
+│       └── post_service.go      # 动态业务逻辑（可见性过滤）
+├── pkg/
+│   └── logger/                  # Zap 日志初始化
+├── frontend/                    # Vue 3 前端（独立子项目）
+│   ├── src/
+│   │   ├── api/index.js         # Axios 封装，自动携带 JWT
+│   │   ├── router/index.js      # Vue Router 路由定义（含鉴权守卫）
+│   │   ├── stores/auth.js       # 轻量认证状态（reactive + localStorage）
+│   │   ├── views/
+│   │   │   ├── HomeView.vue     # 首页：发布表单 + 动态流
+│   │   │   ├── LoginView.vue    # 登录页
+│   │   │   ├── RegisterView.vue # 注册页
+│   │   │   └── MyPostsView.vue  # 我的动态页（含私密）
+│   │   ├── components/
+│   │   │   └── PostCard.vue     # 动态卡片组件
+│   │   └── App.vue              # 根组件（导航栏）
+│   ├── vite.config.js           # Vite 配置（含 /api 代理）
+│   ├── Dockerfile               # 前端生产镜像（Nginx）
+│   └── nginx.conf               # Nginx 反向代理配置
+├── .env.example                 # 环境变量示例
+├── .gitignore
+├── Dockerfile                   # 仅后端镜像
+├── Dockerfile.fullstack         # 前后端合并镜像（可选）
+├── docker-compose.yml           # 一键启动前后端
+├── go.mod
+└── go.sum
 ```
 
 ---
 
-## Configuration
+## API 设计说明
 
-The application reads `config/app.yaml`. A sample configuration:
+**Base URL（开发环境）：** `http://localhost:8080`
 
-```yaml
-server:
-  port: 8080          # Port the HTTP server listens on
-
-database:
-  path: ./mini-api.db # Path to the SQLite database file
-
-jwt:
-  secret: change-me-in-production  # HMAC secret for JWT signing
-
-log:
-  level: info         # Log level: debug | info | warn | error
-```
-
-> **Security note:** Always replace `jwt.secret` with a strong, random value in production. Never commit secrets to version control.
-
-When `log.level` is set to `debug`, the Gin engine runs in debug mode (verbose routing output). All other values switch it to release mode.
-
----
-
-## Deployment
-
-### Prerequisites
-
-- Go **1.21** or later — [Download](https://go.dev/dl/)
-- Git
-
-### 1. Local Deployment (Development)
-
-```bash
-# 1. Clone the repository
-git clone https://github.com/rockyfang2024/mini-api-golang.git
-cd mini-api-golang
-
-# 2. Download dependencies
-go mod tidy
-
-# 3. (Optional) Edit configuration
-#    Open config/app.yaml and adjust port, database path, and jwt.secret
-
-# 4. Build and run from the project root
-go run ./cmd/main.go
-```
-
-The server will start and you will see log output similar to:
-
-```
-{"level":"info","msg":"configuration loaded","port":8080}
-{"level":"info","msg":"database initialized","path":"./mini-api.db"}
-{"level":"info","msg":"starting server","addr":":8080"}
-```
-
-The SQLite database file (`mini-api.db`) is created automatically on first run via GORM auto-migration.
-
-### 2. Build a Binary
-
-```bash
-# Build for the current platform
-go build -o mini-api ./cmd/main.go
-
-# Run the binary
-./mini-api
-```
-
-To cross-compile for Linux on macOS/Windows:
-
-```bash
-GOOS=linux GOARCH=amd64 go build -o mini-api-linux ./cmd/main.go
-```
-
-### 3. Docker Deployment
-
-Create a `Dockerfile` in the project root:
-
-```dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN go build -o mini-api ./cmd/main.go
-
-FROM alpine:3.19
-WORKDIR /app
-COPY --from=builder /app/mini-api .
-COPY config/app.yaml config/app.yaml
-EXPOSE 8080
-CMD ["./mini-api"]
-```
-
-Build and run:
-
-```bash
-docker build -t mini-api-golang .
-docker run -d -p 8080:8080 --name mini-api mini-api-golang
-```
-
-To persist the SQLite database across container restarts, mount a volume:
-
-```bash
-docker run -d -p 8080:8080 \
-  -v $(pwd)/data:/app/data \
-  -e MINI_API_DATABASE_PATH=/app/data/mini-api.db \
-  --name mini-api mini-api-golang
-```
-
-### Graceful Shutdown
-
-The server handles `SIGINT` and `SIGTERM` signals, waiting up to 5 seconds for in-flight requests to complete before exiting. Press `Ctrl+C` or send `kill <PID>` to trigger a clean shutdown.
-
----
-
-## API Reference
-
-Base URL: `http://localhost:8080`
-
-### Response Format
-
-All endpoints return a uniform JSON envelope:
+### 统一响应结构
 
 ```json
 {
@@ -179,7 +124,7 @@ All endpoints return a uniform JSON envelope:
 }
 ```
 
-On error, `success` is `false` and `data` is omitted:
+错误时 `success` 为 `false`，`data` 字段省略：
 
 ```json
 {
@@ -190,24 +135,11 @@ On error, `success` is `false` and `data` is omitted:
 
 ---
 
-### Health Check
+### 认证接口
 
-#### `GET /health`
+#### `POST /api/auth/register` — 注册
 
-Returns the service status. No authentication required.
-
-**Response `200 OK`:**
-```json
-{"status": "ok"}
-```
-
----
-
-### Authentication
-
-#### `POST /register` — Register a new user
-
-**Request body:**
+**请求体：**
 ```json
 {
   "username": "alice",
@@ -216,34 +148,26 @@ Returns the service status. No authentication required.
 }
 ```
 
-| Field      | Type   | Required | Constraints        |
-|------------|--------|----------|--------------------|
-| `username` | string | ✅       | Non-empty          |
-| `email`    | string | ✅       | Valid email format |
-| `password` | string | ✅       | Minimum 6 chars    |
+| 字段 | 类型 | 必填 | 约束 |
+|------|------|------|------|
+| username | string | ✅ | 非空，唯一 |
+| email | string | ✅ | 合法邮箱格式，唯一 |
+| password | string | ✅ | 最少 6 位 |
 
-**Response `201 Created`:**
+**响应 `201 Created`：**
 ```json
 {
   "success": true,
   "message": "user registered",
-  "data": {
-    "id": 1,
-    "username": "alice",
-    "email": "alice@example.com",
-    "created_at": "2026-03-14T04:00:00Z",
-    "updated_at": "2026-03-14T04:00:00Z"
-  }
+  "data": { "id": 1, "username": "alice", "email": "alice@example.com", "created_at": "..." }
 }
 ```
 
-**Response `409 Conflict`** — username or email already exists.
-
 ---
 
-#### `POST /login` — Log in and obtain a JWT token
+#### `POST /api/auth/login` — 登录
 
-**Request body:**
+**请求体：**
 ```json
 {
   "username": "alice",
@@ -251,245 +175,317 @@ Returns the service status. No authentication required.
 }
 ```
 
-**Response `200 OK`:**
+**响应 `200 OK`：**
 ```json
 {
   "success": true,
   "message": "login successful",
   "data": {
-    "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+    "token": "eyJhbGci...",
+    "user": { "id": 1, "username": "alice", "email": "alice@example.com" }
   }
 }
 ```
 
-The token is a **HS256-signed JWT** valid for **72 hours**. Use it as a Bearer token in the `Authorization` header for all protected endpoints:
-
-```
-Authorization: Bearer <token>
-```
-
-**Response `401 Unauthorized`** — invalid credentials.
+> 后续所有需要认证的接口，请在请求头携带：
+> `Authorization: Bearer <token>`
 
 ---
 
-### Users  *(requires authentication)*
+#### `GET /api/me` — 获取当前用户信息（需登录）
 
-All `/users` endpoints require an `Authorization: Bearer <token>` header.
-
-#### `GET /users/:id` — Get a user by ID
-
-```bash
-curl -H "Authorization: Bearer <token>" http://localhost:8080/users/1
-```
-
-**Response `200 OK`:**
+**响应 `200 OK`：**
 ```json
 {
   "success": true,
   "message": "ok",
+  "data": { "id": 1, "username": "alice", "email": "alice@example.com" }
+}
+```
+
+---
+
+### 动态接口
+
+#### `POST /api/posts` — 发布动态（需登录）
+
+**请求体：**
+```json
+{
+  "content": "今天天气不错！",
+  "visibility": "public"
+}
+```
+
+| 字段 | 类型 | 必填 | 取值 |
+|------|------|------|------|
+| content | string | ✅ | 任意文本 |
+| visibility | string | ✅ | `public` 或 `private` |
+
+**响应 `201 Created`：**
+```json
+{
+  "success": true,
+  "message": "post created",
   "data": {
     "id": 1,
-    "username": "alice",
-    "email": "alice@example.com",
-    "created_at": "2026-03-14T04:00:00Z",
-    "updated_at": "2026-03-14T04:00:00Z"
-  }
-}
-```
-
-**Response `404 Not Found`** — no user with that ID.
-
----
-
-#### `PUT /users/:id` — Update a user's email
-
-**Request body:**
-```json
-{
-  "email": "newalice@example.com"
-}
-```
-
-| Field   | Type   | Required | Constraints        |
-|---------|--------|----------|--------------------|
-| `email` | string | ❌       | Valid email format |
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "user updated",
-  "data": {
-    "id": 1,
-    "username": "alice",
-    "email": "newalice@example.com",
-    "created_at": "2026-03-14T04:00:00Z",
-    "updated_at": "2026-03-14T04:10:00Z"
+    "author_id": 1,
+    "author": { "id": 1, "username": "alice" },
+    "content": "今天天气不错！",
+    "visibility": "public",
+    "created_at": "2026-03-14T08:00:00Z"
   }
 }
 ```
 
 ---
 
-#### `DELETE /users/:id` — Delete a user
+#### `GET /api/posts` — 获取首页动态列表
 
-```bash
-curl -X DELETE -H "Authorization: Bearer <token>" http://localhost:8080/users/1
-```
+- **未登录**：只返回所有人的 `public` 动态
+- **已登录**（携带 token）：返回所有人的 `public` 动态 + 自己的 `private` 动态
 
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "user deleted"
-}
-```
-
----
-
-### Tasks  *(requires authentication)*
-
-All `/tasks` endpoints require an `Authorization: Bearer <token>` header.
-
-#### `POST /tasks` — Create a task
-
-**Request body:**
-```json
-{
-  "title": "Buy groceries"
-}
-```
-
-| Field   | Type   | Required | Constraints |
-|---------|--------|----------|-------------|
-| `title` | string | ✅       | Non-empty   |
-
-**Response `201 Created`:**
-```json
-{
-  "success": true,
-  "message": "task created",
-  "data": {
-    "ID": 1,
-    "Title": "Buy groceries",
-    "Done": false
-  }
-}
-```
-
----
-
-#### `GET /tasks/:id` — Get a task by ID
-
-```bash
-curl -H "Authorization: Bearer <token>" http://localhost:8080/tasks/1
-```
-
-**Response `200 OK`:**
+**响应 `200 OK`：**
 ```json
 {
   "success": true,
   "message": "ok",
-  "data": {
-    "ID": 1,
-    "Title": "Buy groceries",
-    "Done": false
-  }
-}
-```
-
-**Response `404 Not Found`** — no task with that ID.
-
----
-
-#### `PUT /tasks/:id` — Update a task
-
-**Request body** (all fields optional):
-```json
-{
-  "title": "Buy groceries and cook dinner",
-  "done": true
-}
-```
-
-| Field   | Type    | Required | Description             |
-|---------|---------|----------|-------------------------|
-| `title` | string  | ❌       | New task title          |
-| `done`  | boolean | ❌       | Mark task as done/undone|
-
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "task updated",
-  "data": {
-    "ID": 1,
-    "Title": "Buy groceries and cook dinner",
-    "Done": true
-  }
+  "data": [
+    { "id": 2, "author": { "username": "bob" }, "content": "Hello!", "visibility": "public", ... },
+    { "id": 1, "author": { "username": "alice" }, "content": "私密动态", "visibility": "private", ... }
+  ]
 }
 ```
 
 ---
 
-#### `DELETE /tasks/:id` — Delete a task
+#### `GET /api/users/:id/posts` — 获取指定用户动态
+
+- 若 `:id` 为当前登录用户，返回该用户所有动态（含私密）
+- 否则仅返回该用户的 `public` 动态
+
+---
+
+### 其他接口（旧功能保留，路径不含 `/api`）
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | /health | 健康检查 |
+| POST | /register | 注册（旧路径） |
+| POST | /login | 登录（旧路径） |
+| GET/PUT/DELETE | /users/:id | 用户管理（需登录） |
+| POST/GET/PUT/DELETE | /tasks/:id | 任务管理（需登录） |
+
+---
+
+## 本地开发运行
+
+### 环境要求
+
+- Go **1.21+** — [下载](https://go.dev/dl/)
+- Node.js **18+** — [下载](https://nodejs.org/)
+- Git
+
+### 1. 克隆仓库
 
 ```bash
-curl -X DELETE -H "Authorization: Bearer <token>" http://localhost:8080/tasks/1
+git clone https://github.com/rockyfang2024/mini-api-golang.git
+cd mini-api-golang
 ```
 
-**Response `200 OK`:**
-```json
-{
-  "success": true,
-  "message": "task deleted"
-}
-```
+### 2. 配置后端
 
----
-
-## End-to-End Usage Example
+复制并查看配置文件（可选，默认值已可直接运行）：
 
 ```bash
-BASE=http://localhost:8080
-
-# 1. Register
-curl -s -X POST $BASE/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","email":"alice@example.com","password":"secret123"}'
-
-# 2. Login and capture the token
-TOKEN=$(curl -s -X POST $BASE/login \
-  -H "Content-Type: application/json" \
-  -d '{"username":"alice","password":"secret123"}' | \
-  grep -o '"token":"[^"]*"' | cut -d'"' -f4)
-
-# 3. Create a task
-curl -s -X POST $BASE/tasks \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Buy groceries"}'
-
-# 4. Mark the task as done (replace 1 with the actual task ID)
-curl -s -X PUT $BASE/tasks/1 \
-  -H "Authorization: Bearer $TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '{"done":true}'
-
-# 5. Fetch the task
-curl -s -H "Authorization: Bearer $TOKEN" $BASE/tasks/1
+# 默认配置文件
+cat config/app.yaml
 ```
 
----
+如需自定义，编辑 `config/app.yaml`：
 
-## Running Tests
+```yaml
+server:
+  port: 8080            # 后端监听端口
+
+database:
+  path: ./mini-api.db   # SQLite 数据库文件路径
+
+jwt:
+  secret: change-me-in-production  # JWT 签名密钥（生产环境必须替换）
+
+log:
+  level: info           # 日志级别: debug | info | warn | error
+```
+
+也可通过环境变量覆盖（优先级高于配置文件）：
 
 ```bash
-go test ./...
+export MINI_API_SERVER_PORT=9090
+export MINI_API_JWT_SECRET=my-super-secret
+export MINI_API_DATABASE_PATH=/data/weibo.db
+```
+
+### 3. 启动后端
+
+```bash
+# 下载依赖
+go mod tidy
+
+# 运行
+go run ./cmd/main.go
+```
+
+成功后日志输出：
+```
+{"level":"info","msg":"configuration loaded","port":8080}
+{"level":"info","msg":"database initialized","path":"./mini-api.db"}
+{"level":"info","msg":"starting server","addr":":8080"}
+```
+
+数据库文件 `mini-api.db` 首次运行时自动创建并建表。
+
+### 4. 启动前端
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+成功后输出：
+```
+  VITE v8.x.x  ready in xxx ms
+
+  ➜  Local:   http://localhost:5173/
+```
+
+### 5. 访问地址
+
+| 服务 | 地址 |
+|------|------|
+| 前端页面 | http://localhost:5173 |
+| 后端 API | http://localhost:8080 |
+| 健康检查 | http://localhost:8080/health |
+
+> **跨域说明：** 前端 Vite dev server 通过 `vite.config.js` 中的 `proxy` 配置，将 `/api` 请求透明代理到后端 `http://localhost:8080`，无需手动处理跨域。后端同时配置了 CORS 允许来自 `localhost:5173` 的直接请求。
+
+---
+
+## 生产部署
+
+### 方案一：Docker Compose（推荐）
+
+同时启动前后端服务，数据持久化到 Docker volume。
+
+```bash
+# 1. 复制环境变量配置
+cp .env.example .env
+# 编辑 .env，设置 JWT_SECRET 等
+
+# 2. 构建并启动
+docker-compose up -d --build
+
+# 3. 查看日志
+docker-compose logs -f
+```
+
+服务说明：
+- 后端：端口 `8080`
+- 前端（Nginx）：端口 `3000`，自动代理 `/api` 到后端
+
+停止服务：
+```bash
+docker-compose down
+```
+
+### 方案二：前端构建产物由后端静态托管
+
+> 适合单机部署，只需运行一个进程。
+
+```bash
+# 1. 构建前端
+cd frontend
+npm install
+npm run build
+# 产物在 frontend/dist/
+
+# 2. （可选）将 dist/ 复制到后端目录
+cp -r dist/ ../frontend-dist/
+
+# 3. 后端服务器在 cmd/main.go 中添加静态文件托管（示例）
+#    r.Static("/", "./frontend-dist")
+# 目前版本暂未内置静态托管，可参考 gin 文档添加
+```
+
+### 方案三：分别部署二进制 + Nginx
+
+```bash
+# 编译后端二进制
+go build -o mini-api ./cmd/main.go
+
+# 运行后端
+./mini-api
+
+# 前端由 Nginx 托管，配置反向代理 /api → localhost:8080
 ```
 
 ---
 
-## License
+## 访问方式
 
-This project is open source. See the repository for license details.
+### 开发环境
+
+1. 打开浏览器访问 **http://localhost:5173**
+2. 点击「注册」创建新账号（填写用户名、邮箱、密码）
+3. 使用注册的账号「登录」
+4. 登录后可在首页发布动态（选择公开/私密）
+5. 点击顶部头像/「我的动态」查看自己的所有动态
+6. 点击「退出」退出登录
+
+### Docker Compose 环境
+
+访问 **http://localhost:3000**，功能与开发环境相同。
+
+### Token 存储说明
+
+- 登录成功后，JWT Token 存储在浏览器的 `localStorage`（key: `token`）。
+- 用户信息（id、username、email）存储在 `localStorage`（key: `user`）。
+- 退出登录时前端清除以上两项，Token 不需要服务端销毁（JWT 无状态）。
+- Token 有效期为 **72 小时**，过期后需重新登录。
+
+---
+
+## 常见问题
+
+### Q: 前端请求 API 时报 CORS 错误
+
+**A:** 后端已配置 CORS 允许 `http://localhost:5173` 和 `http://localhost:3000`。如果你修改了前端端口，需同步更新 `internal/routes/routes.go` 中的 `AllowOrigins` 列表，然后重启后端。
+
+### Q: 端口 8080 或 5173 被占用
+
+**A:** 
+- 后端：修改 `config/app.yaml` 中的 `server.port`，或设置环境变量 `MINI_API_SERVER_PORT=9090`
+- 前端：在 `frontend/vite.config.js` 的 `server` 配置中添加 `port: 3001`，同时更新代理目标或后端 CORS 配置
+
+### Q: 数据库文件在哪里？
+
+**A:** 默认在项目根目录 `./mini-api.db`（SQLite 单文件）。可通过 `config/app.yaml` 的 `database.path` 或环境变量 `MINI_API_DATABASE_PATH` 修改路径。Docker 部署时数据存储在 `db_data` volume 中，容器重启数据不会丢失。
+
+### Q: 如何重置数据？
+
+**A:** 删除 `mini-api.db` 文件，重启后端即可自动重新建表。
+
+### Q: 生产环境 JWT Secret 应该怎么设置？
+
+**A:** 绝对不能使用默认值。建议使用随机字符串（如 `openssl rand -base64 32`），通过环境变量 `MINI_API_JWT_SECRET=<your-secret>` 注入，不要提交到版本控制。
+
+### Q: 如何在 Docker Compose 中修改 JWT Secret？
+
+**A:** 编辑 `.env` 文件（从 `.env.example` 复制），设置 `JWT_SECRET=your-strong-secret`，然后重新 `docker-compose up -d`。
+
+---
+
+## 许可证
+
+本项目开源，详见仓库许可信息。

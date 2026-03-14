@@ -1,0 +1,28 @@
+# ---- Frontend build stage ----
+FROM node:20-alpine AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package*.json ./
+RUN npm ci
+COPY frontend/ ./
+RUN npm run build
+
+# ---- Backend build stage ----
+FROM golang:1.21-alpine AS backend-builder
+WORKDIR /app
+RUN apk add --no-cache gcc musl-dev
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# Embed frontend dist so the binary can serve static files
+COPY --from=frontend-builder /app/frontend/dist ./frontend/dist
+RUN go build -o mini-api ./cmd/main.go
+
+# ---- Runtime stage ----
+FROM alpine:3.19
+WORKDIR /app
+RUN apk add --no-cache ca-certificates
+COPY --from=backend-builder /app/mini-api .
+COPY --from=backend-builder /app/frontend/dist ./frontend/dist
+COPY config/app.yaml config/app.yaml
+EXPOSE 8080
+CMD ["./mini-api"]

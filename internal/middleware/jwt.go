@@ -52,3 +52,39 @@ func JWTMiddleware(secretKey string) gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// OptionalJWT is like JWTMiddleware but does not abort on missing/invalid tokens.
+// When a valid token is present the user_id claim is stored in the context.
+func OptionalJWT(secretKey string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			c.Next()
+			return
+		}
+
+		parts := strings.SplitN(authHeader, " ", 2)
+		if len(parts) != 2 || !strings.EqualFold(parts[0], "bearer") {
+			c.Next()
+			return
+		}
+		tokenString := parts[1]
+
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+			}
+			return []byte(secretKey), nil
+		})
+
+		if err == nil && token.Valid {
+			if claims, ok := token.Claims.(jwt.MapClaims); ok {
+				if userID, ok := claims["user_id"].(string); ok {
+					c.Set("user_id", userID)
+				}
+			}
+		}
+
+		c.Next()
+	}
+}
