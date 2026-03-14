@@ -9,12 +9,13 @@ import (
 
 // UserService provides business logic for user operations.
 type UserService struct {
-	userDAO *dao.UserDAO
+	userDAO     *dao.UserDAO
+	settingsDAO *dao.UserSettingsDAO
 }
 
 // NewUserService creates a new UserService with the given DAO.
-func NewUserService(userDAO *dao.UserDAO) *UserService {
-	return &UserService{userDAO: userDAO}
+func NewUserService(userDAO *dao.UserDAO, settingsDAO *dao.UserSettingsDAO) *UserService {
+	return &UserService{userDAO: userDAO, settingsDAO: settingsDAO}
 }
 
 // Register creates a new user with a hashed password.
@@ -36,6 +37,11 @@ func (s *UserService) Register(username, email, password string) (*models.User, 
 	}
 
 	if err := s.userDAO.Create(user); err != nil {
+		return nil, err
+	}
+
+	_, err = ensureUserSettings(s.settingsDAO, user.ID)
+	if err != nil {
 		return nil, err
 	}
 

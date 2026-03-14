@@ -12,17 +12,19 @@ import (
 
 // PostHandler holds dependencies for post HTTP handlers.
 type PostHandler struct {
-	postService   *service.PostService
-	likeService   *service.LikeService
-	repostService *service.RepostService
+	postService      *service.PostService
+	postImageService *service.PostImageService
+	likeService      *service.LikeService
+	repostService    *service.RepostService
 }
 
 // NewPostHandler creates a new PostHandler.
-func NewPostHandler(postService *service.PostService, likeService *service.LikeService, repostService *service.RepostService) *PostHandler {
+func NewPostHandler(postService *service.PostService, postImageService *service.PostImageService, likeService *service.LikeService, repostService *service.RepostService) *PostHandler {
 	return &PostHandler{
-		postService:   postService,
-		likeService:   likeService,
-		repostService: repostService,
+		postService:      postService,
+		postImageService: postImageService,
+		likeService:      likeService,
+		repostService:    repostService,
 	}
 }
 
@@ -66,14 +68,14 @@ func (h *PostHandler) enrichPosts(posts []models.Post, viewerID uint) []PostResp
 
 // createPostRequest is the expected body for POST /api/posts.
 type createPostRequest struct {
-	Content    string            `json:"content"    binding:"required"`
-	Visibility models.Visibility `json:"visibility" binding:"required,oneof=public private"`
+	Content    string            `json:"content"    form:"content"    binding:"required"`
+	Visibility models.Visibility `json:"visibility" form:"visibility" binding:"required,oneof=public private"`
 }
 
 // CreatePost handles POST /api/posts — create a new post (requires auth).
 func (h *PostHandler) CreatePost(c *gin.Context) {
 	var req createPostRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := c.ShouldBind(&req); err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
 	}
@@ -89,6 +91,24 @@ func (h *PostHandler) CreatePost(c *gin.Context) {
 	if err != nil {
 		utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		return
+	}
+
+	if form, err := c.MultipartForm(); err == nil && form != nil {
+		files := form.File["images"]
+		if len(files) > 9 {
+			_ = h.postService.Delete(post.ID)
+			utils.ErrorResponse(c, http.StatusBadRequest, "最多只能上传 9 张图片")
+			return
+		}
+		if len(files) > 0 {
+			images, err := h.postImageService.UploadPostImages(post.ID, files)
+			if err != nil {
+				_ = h.postService.Delete(post.ID)
+				utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
+				return
+			}
+			post.Images = images
+		}
 	}
 
 	utils.SuccessResponse(c, http.StatusCreated, "post created", h.enrichPost(*post, uint(userID)))
@@ -130,10 +150,13 @@ func (h *PostHandler) ListUserPosts(c *gin.Context) {
 
 	posts, err := h.postService.ListByUser(authorID, viewerID)
 	if err != nil {
+		if err == service.ErrPostsNotVisible {
+			utils.ErrorResponse(c, http.StatusForbidden, "posts not visible")
+			return
+		}
 		utils.ErrorResponse(c, http.StatusInternalServerError, "failed to fetch posts")
 		return
 	}
 
 	utils.SuccessResponse(c, http.StatusOK, "ok", h.enrichPosts(posts, viewerID))
 }
-

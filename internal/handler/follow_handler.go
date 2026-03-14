@@ -42,6 +42,8 @@ func (h *FollowHandler) FollowUser(c *gin.Context) {
 			utils.ErrorResponse(c, http.StatusBadRequest, "cannot follow yourself")
 		case errors.Is(err, dao.ErrAlreadyFollowed):
 			utils.ErrorResponse(c, http.StatusConflict, "already following this user")
+		case errors.Is(err, service.ErrFollowDisabled):
+			utils.ErrorResponse(c, http.StatusForbidden, "user has disabled followers")
 		default:
 			utils.ErrorResponse(c, http.StatusBadRequest, err.Error())
 		}
