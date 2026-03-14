@@ -43,11 +43,14 @@ func main() {
 	// Wire up layers
 	userDAO := dao.NewUserDAO(db)
 	taskDAO := dao.NewTaskDAO(db)
+	postDAO := dao.NewPostDAO(db)
 
 	userSvc := service.NewUserService(userDAO)
+	postSvc := service.NewPostService(postDAO)
 
 	userH := handler.NewUserHandler(userSvc, cfg)
 	taskH := handler.NewTaskHandler(taskDAO)
+	postH := handler.NewPostHandler(postSvc)
 
 	// Set up Gin engine
 	if cfg.Log.Level != "debug" {
@@ -57,7 +60,7 @@ func main() {
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger(log))
 
-	routes.SetupRoutes(r, userH, taskH, cfg.JWT.Secret)
+	routes.SetupRoutes(r, userH, taskH, postH, cfg.JWT.Secret)
 
 	// Create HTTP server
 	srv := &http.Server{

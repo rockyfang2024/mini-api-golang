@@ -54,7 +54,7 @@ func (h *UserHandler) Register(c *gin.Context) {
 	utils.SuccessResponse(c, http.StatusCreated, "user registered", user)
 }
 
-// Login handles POST /login – authenticate and return a JWT.
+// Login handles POST /login and POST /api/auth/login – authenticate and return a JWT.
 func (h *UserHandler) Login(c *gin.Context) {
 	var req loginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -74,7 +74,28 @@ func (h *UserHandler) Login(c *gin.Context) {
 		return
 	}
 
-	utils.SuccessResponse(c, http.StatusOK, "login successful", gin.H{"token": token})
+	utils.SuccessResponse(c, http.StatusOK, "login successful", gin.H{
+		"token": token,
+		"user":  user,
+	})
+}
+
+// Me handles GET /api/me – return the currently authenticated user.
+func (h *UserHandler) Me(c *gin.Context) {
+	userIDStr, _ := c.Get("user_id")
+	userID, err := strconv.ParseUint(userIDStr.(string), 10, 64)
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusUnauthorized, "invalid token")
+		return
+	}
+
+	user, err := h.userService.GetByID(uint(userID))
+	if err != nil {
+		utils.ErrorResponse(c, http.StatusNotFound, "user not found")
+		return
+	}
+
+	utils.SuccessResponse(c, http.StatusOK, "ok", user)
 }
 
 // GetUser handles GET /users/:id – retrieve a user by ID.
