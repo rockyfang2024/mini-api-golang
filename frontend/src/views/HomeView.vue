@@ -1,6 +1,6 @@
 <script setup>
-import { ref, onMounted } from 'vue'
-import { getPosts, createPost } from '../api/index.js'
+import { ref, onMounted, watch } from 'vue'
+import { getPosts, createPost, getFollowing } from '../api/index.js'
 import { authStore } from '../stores/auth'
 import PostCard from '../components/PostCard.vue'
 
@@ -11,6 +11,7 @@ const error = ref('')
 const postError = ref('')
 const loading = ref(false)
 const posting = ref(false)
+const followingIds = ref(new Set())
 
 async function fetchPosts() {
   loading.value = true
@@ -23,6 +24,35 @@ async function fetchPosts() {
   } finally {
     loading.value = false
   }
+}
+
+async function fetchFollowing() {
+  if (!authStore.isLoggedIn || !authStore.user?.id) {
+    followingIds.value = new Set()
+    return
+  }
+  try {
+    const res = await getFollowing(authStore.user.id, 1, 100)
+    const ids = new Set(res.data.data.following?.map((f) => f.following_id))
+    followingIds.value = ids
+  } catch (e) {
+    followingIds.value = new Set()
+  }
+}
+
+function isFollowingAuthor(post) {
+  const authorId = post.author_id || post.author?.id
+  return authorId ? followingIds.value.has(authorId) : false
+}
+
+function handleFollowChange({ userId, isFollowing }) {
+  const next = new Set(followingIds.value)
+  if (isFollowing) {
+    next.add(userId)
+  } else {
+    next.delete(userId)
+  }
+  followingIds.value = next
 }
 
 async function handlePost() {
@@ -45,6 +75,18 @@ async function handlePost() {
 }
 
 onMounted(fetchPosts)
+
+watch(
+  () => authStore.isLoggedIn,
+  (loggedIn) => {
+    if (loggedIn) {
+      fetchFollowing()
+    } else {
+      followingIds.value = new Set()
+    }
+  },
+  { immediate: true }
+)
 </script>
 
 <template>
@@ -75,7 +117,14 @@ onMounted(fetchPosts)
     <div v-else-if="error" class="empty-state" style="color:#e0245e">{{ error }}</div>
     <div v-else-if="posts.length === 0" class="empty-state">暂无动态，快来发第一条吧 🎉</div>
     <template v-else>
-      <PostCard v-for="post in posts" :key="post.id" :post="post" />
+      <PostCard
+        v-for="post in posts"
+        :key="post.id"
+        :post="post"
+        :show-follow="authStore.isLoggedIn"
+        :is-following="isFollowingAuthor(post)"
+        @follow-change="handleFollowChange"
+      />
     </template>
   </div>
 </template>

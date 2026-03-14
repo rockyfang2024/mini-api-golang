@@ -20,8 +20,17 @@ function logout() {
         <router-link to="/">首页</router-link>
         <template v-if="authStore.isLoggedIn">
           <router-link to="/my-posts">我的动态</router-link>
+          <router-link to="/notifications">通知</router-link>
           <span class="nav-user" @click="router.push('/my-posts')">
-            <span class="avatar">{{ authStore.user?.username?.[0]?.toUpperCase() }}</span>
+            <span class="avatar">
+              <img
+                v-if="authStore.user?.avatar_url"
+                :src="authStore.user.avatar_url"
+                alt="avatar"
+                class="avatar-img"
+              />
+              <span v-else>{{ authStore.user?.username?.[0]?.toUpperCase() }}</span>
+            </span>
             {{ authStore.user?.username }}
           </span>
           <button class="btn-logout" @click="logout">退出</button>
@@ -62,6 +71,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; b
 .nav-links a:hover, .nav-links a.router-link-active { color: #1da1f2; }
 .nav-user { cursor: pointer; display: flex; align-items: center; gap: 6px; font-size: .95rem; color: #333; }
 .avatar { width: 30px; height: 30px; border-radius: 50%; background: #1da1f2; color: #fff; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: .85rem; }
+.avatar-img { width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
 .btn-logout { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 4px 12px; cursor: pointer; color: #666; font-size: .9rem; }
 .btn-logout:hover { background: #f5f5f5; }
 .container { max-width: 640px; margin: 0 auto; padding: 24px 16px; }
