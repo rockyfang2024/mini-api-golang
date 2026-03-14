@@ -3,12 +3,14 @@ import HomeView from '../views/HomeView.vue'
 import LoginView from '../views/LoginView.vue'
 import RegisterView from '../views/RegisterView.vue'
 import MyPostsView from '../views/MyPostsView.vue'
+import NotificationsView from '../views/NotificationsView.vue'
 
 const routes = [
   { path: '/', name: 'home', component: HomeView },
   { path: '/login', name: 'login', component: LoginView },
   { path: '/register', name: 'register', component: RegisterView },
   { path: '/my-posts', name: 'my-posts', component: MyPostsView, meta: { requiresAuth: true } },
+  { path: '/notifications', name: 'notifications', component: NotificationsView, meta: { requiresAuth: true } },
 ]
 
 const router = createRouter({
