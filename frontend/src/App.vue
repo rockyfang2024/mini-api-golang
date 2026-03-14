@@ -21,7 +21,8 @@ function logout() {
         <template v-if="authStore.isLoggedIn">
           <router-link to="/my-posts">我的动态</router-link>
           <router-link to="/notifications">通知</router-link>
-          <span class="nav-user" @click="router.push('/my-posts')">
+          <router-link to="/settings">设置</router-link>
+          <router-link v-if="authStore.user?.id" :to="`/users/${authStore.user.id}`" class="nav-user">
             <span class="avatar">
               <img
                 v-if="authStore.user?.avatar_url"
@@ -32,7 +33,7 @@ function logout() {
               <span v-else>{{ authStore.user?.username?.[0]?.toUpperCase() }}</span>
             </span>
             {{ authStore.user?.username }}
-          </span>
+          </router-link>
           <button class="btn-logout" @click="logout">退出</button>
         </template>
         <template v-else>

@@ -23,14 +23,14 @@ func (d *PostDAO) Create(post *models.Post) error {
 // GetByID retrieves a post by its ID, preloading the author.
 func (d *PostDAO) GetByID(id uint) (*models.Post, error) {
 	var post models.Post
-	err := d.DB.Preload("Author").First(&post, id).Error
+	err := d.DB.Preload("Author").Preload("Images").First(&post, id).Error
 	return &post, err
 }
 
 // ListPublic returns all public posts, ordered newest-first, with authors preloaded.
 func (d *PostDAO) ListPublic() ([]models.Post, error) {
 	var posts []models.Post
-	err := d.DB.Preload("Author").
+	err := d.DB.Preload("Author").Preload("Images").
 		Where("visibility = ?", models.VisibilityPublic).
 		Order("created_at DESC").
 		Find(&posts).Error
@@ -44,7 +44,7 @@ func (d *PostDAO) ListPublic() ([]models.Post, error) {
 // ordered newest-first, with authors preloaded.
 func (d *PostDAO) ListForUser(viewerID uint) ([]models.Post, error) {
 	var posts []models.Post
-	err := d.DB.Preload("Author").
+	err := d.DB.Preload("Author").Preload("Images").
 		Where("visibility = ? OR (visibility = ? AND author_id = ?)",
 			models.VisibilityPublic, models.VisibilityPrivate, viewerID).
 		Order("created_at DESC").
@@ -55,7 +55,7 @@ func (d *PostDAO) ListForUser(viewerID uint) ([]models.Post, error) {
 // ListByAuthorPublic returns all public posts belonging to authorID, newest-first.
 func (d *PostDAO) ListByAuthorPublic(authorID uint) ([]models.Post, error) {
 	var posts []models.Post
-	err := d.DB.Preload("Author").
+	err := d.DB.Preload("Author").Preload("Images").
 		Where("author_id = ? AND visibility = ?", authorID, models.VisibilityPublic).
 		Order("created_at DESC").
 		Find(&posts).Error
@@ -65,9 +65,14 @@ func (d *PostDAO) ListByAuthorPublic(authorID uint) ([]models.Post, error) {
 // ListByAuthorAll returns all posts (public + private) belonging to authorID, newest-first.
 func (d *PostDAO) ListByAuthorAll(authorID uint) ([]models.Post, error) {
 	var posts []models.Post
-	err := d.DB.Preload("Author").
+	err := d.DB.Preload("Author").Preload("Images").
 		Where("author_id = ?", authorID).
 		Order("created_at DESC").
 		Find(&posts).Error
 	return posts, err
+}
+
+// Delete removes a post by ID.
+func (d *PostDAO) Delete(postID uint) error {
+	return d.DB.Delete(&models.Post{}, postID).Error
 }

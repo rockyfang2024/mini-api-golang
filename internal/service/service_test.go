@@ -21,7 +21,10 @@ func setupTestDB(t *testing.T) *gorm.DB {
 
 	err = db.AutoMigrate(
 		&models.User{},
+		&models.UserSettings{},
 		&models.Post{},
+		&models.PostImage{},
+		&models.Comment{},
 		&models.Like{},
 		&models.Repost{},
 		&models.Notification{},
@@ -172,7 +175,8 @@ func TestFollow_Success(t *testing.T) {
 	followDAO := dao.NewFollowDAO(db)
 	userDAO := dao.NewUserDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
 
 	alice := createUser(t, db, "alice")
 	bob := createUser(t, db, "bob")
@@ -192,7 +196,8 @@ func TestFollow_Duplicate(t *testing.T) {
 	followDAO := dao.NewFollowDAO(db)
 	userDAO := dao.NewUserDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
 
 	alice := createUser(t, db, "alice")
 	bob := createUser(t, db, "bob")
@@ -210,7 +215,8 @@ func TestFollow_Self(t *testing.T) {
 	followDAO := dao.NewFollowDAO(db)
 	userDAO := dao.NewUserDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
 
 	alice := createUser(t, db, "alice")
 
@@ -224,7 +230,8 @@ func TestUnfollow_Success(t *testing.T) {
 	followDAO := dao.NewFollowDAO(db)
 	userDAO := dao.NewUserDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
 
 	alice := createUser(t, db, "alice")
 	bob := createUser(t, db, "bob")
@@ -244,7 +251,8 @@ func TestUnfollow_NotFollowing(t *testing.T) {
 	followDAO := dao.NewFollowDAO(db)
 	userDAO := dao.NewUserDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
 
 	alice := createUser(t, db, "alice")
 	bob := createUser(t, db, "bob")
@@ -259,7 +267,8 @@ func TestFollow_MutualFollow(t *testing.T) {
 	followDAO := dao.NewFollowDAO(db)
 	userDAO := dao.NewUserDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
 
 	alice := createUser(t, db, "alice")
 	bob := createUser(t, db, "bob")
@@ -378,8 +387,9 @@ func TestNotification_FollowerReceivesNewPostNotification(t *testing.T) {
 	postDAO := dao.NewPostDAO(db)
 	notifDAO := dao.NewNotificationDAO(db)
 	notifSvc := service.NewNotificationService(notifDAO)
-	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO)
-	postSvc := service.NewPostService(postDAO, followDAO, notifDAO)
+	settingsDAO := dao.NewUserSettingsDAO(db)
+	followSvc := service.NewFollowService(followDAO, userDAO, notifDAO, settingsDAO)
+	postSvc := service.NewPostService(postDAO, followDAO, notifDAO, settingsDAO)
 
 	author := createUser(t, db, "author")
 	follower := createUser(t, db, "follower")
