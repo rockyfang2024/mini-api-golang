@@ -2,10 +2,10 @@ server:
   port: 8080
 
 database:
-  path: /path/to/database
+  path: ./mini-api.db
 
 jwt:
-  secret: your_jwt_secret
+  secret: mock-jwt-secret-key-change-in-production
 
 log:
   level: info

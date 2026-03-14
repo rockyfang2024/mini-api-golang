@@ -1,32 +1,37 @@
 package utils
 
 import (
-	"github.com/dgrijalva/jwt-go"
+	"fmt"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
-// GenerateJWT generates a new JWT token
+// GenerateJWT creates a signed HS256 JWT token for the given userID.
+// The token is valid for 72 hours.
 func GenerateJWT(secretKey string, userID string) (string, error) {
-	token := jwt.New(jwt.SigningMethodHS256)
+	claims := jwt.MapClaims{
+		"authorized": true,
+		"user_id":    userID,
+		"iat":        time.Now().Unix(),
+		"exp":        time.Now().Add(72 * time.Hour).Unix(),
+	}
 
-	claims := token.Claims.(jwt.MapClaims)
-	claims["authorized"] = true
-	claims["user_id"] = userID
-	claims["exp"] = time.Now().Add(time.Hour * 72).Unix() // Token valid for 72 hours
-
-	// Sign the token with secret key
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	tokenString, err := token.SignedString([]byte(secretKey))
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
 
 	return tokenString, nil
 }
 
-// ValidateJWT validates the JWT token and returns the user ID if valid
+// ValidateJWT parses and validates a JWT token, returning the user_id claim.
 func ValidateJWT(tokenString string, secretKey string) (string, error) {
-	// Parse the token
 	token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
+		}
 		return []byte(secretKey), nil
 	})
 	if err != nil {
@@ -35,9 +40,13 @@ func ValidateJWT(tokenString string, secretKey string) (string, error) {
 
 	claims, ok := token.Claims.(jwt.MapClaims)
 	if !ok || !token.Valid {
-		return "", err
+		return "", fmt.Errorf("invalid token")
 	}
 
-	userID := claims["user_id"]
-	return userID.(string), nil
+	userID, ok := claims["user_id"].(string)
+	if !ok {
+		return "", fmt.Errorf("user_id claim missing or not a string")
+	}
+
+	return userID, nil
 }

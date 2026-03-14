@@ -4,9 +4,10 @@ import "time"
 
 // User represents the user model in the application.
 type User struct {
-	ID        int       `json:"id"`        // unique identifier for the user
-	Username  string    `json:"username"`  // username of the user
-	Email     string    `json:"email"`     // email address of the user
-	Password  string    `json:"password"`  // password of the user
-	CreatedAt time.Time `json:"created_at"` // timestamp when the user was created
+	ID           uint      `gorm:"primaryKey;autoIncrement" json:"id"`
+	Username     string    `gorm:"size:100;uniqueIndex;not null" json:"username"`
+	Email        string    `gorm:"size:200;uniqueIndex;not null" json:"email"`
+	PasswordHash string    `gorm:"size:255;not null" json:"-"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
 }
