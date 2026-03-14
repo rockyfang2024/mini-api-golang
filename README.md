@@ -1,53 +1,39 @@
-# Project Overview
+# Deployment Instructions
 
-This is a comprehensive backend API developed in Golang for handling various functionalities.
-
-# Architecture
-
-The architecture is microservices-based, ensuring a modular approach to building the application.
-
-# Features
-- Feature 1: Description
-- Feature 2: Description
-
-# Prerequisites
-- Go 1.16 or higher
-- Any database (e.g., PostgreSQL, MongoDB)
-
-# Installation Steps
-1. Clone the repository:
+1. **Clone the Repository**
    ```bash
    git clone https://github.com/rockyfang2024/mini-api-golang.git
    cd mini-api-golang
    ```
-2. Install dependencies:
+
+2. **Install Dependencies**
+   Make sure you have Go installed. Run:
    ```bash
    go mod tidy
    ```
 
-# Configuration Guide
-- Configure the `.env` file with your database and service configurations.
-
-# Deployment Instructions for Beginners
-1. Build the application:
+3. **Build the Application**
    ```bash
-   go build -o myapp
-   ```
-2. Run the application:
-   ```bash
-   ./myapp
+   go build -o mini-api
    ```
 
-# API Documentation
-- Endpoint: `/api/v1/resource`
-  - Method: `GET`
-  - Description: Fetches resources.
+4. **Run the Application**
+   ```bash
+   ./mini-api
+   ```
 
-# Troubleshooting Guide
-- If you encounter `Error X`: check if the database connection is correctly configured.
+5. **Access the API**
+   Open your browser or use a tool like Postman to access the API endpoints at `http://localhost:8080`.
 
-# Development Guide
-- Use the provided scripts for testing and running migrations.
+# Access Instructions
 
-## License
-This project is licensed under the MIT License.
+You can access the API endpoints using any REST client. Here are a few example endpoints:
+- `GET /api/v1/resources` - Fetch all resources
+- `POST /api/v1/resources` - Create a new resource
+
+Remember to review the API documentation for authentication and other requirements.
+
+---
+
+**Current Date and Time (UTC): 2026-03-14 04:13:58**  
+**Current User's Login: rockyfang2024**
